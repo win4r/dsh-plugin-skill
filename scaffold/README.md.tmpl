@@ -1,0 +1,84 @@
+# __PLUGIN_NAME__
+
+__DESCRIPTION__
+
+Registers one DeepSeek Harness tool, `__TOOL_NAME__`.
+
+## Layout
+
+```
+src/index.ts        name / inject / Config / apply(ctx, config) + the tool definition
+src/config.ts       Schemastery Config (interface + runtime schema, same name)
+cordis.patch.yml    the profile layer this package contributes (row id: __PLUGIN_ID__)
+test/logic.test.mjs node --test suite, importing from ../dist/*.js
+dist/               build output -- git-ignored, but REQUIRED before install
+```
+
+## Build
+
+```bash
+npm install
+npm run build            # rebuild after EVERY source edit: the install is a symlink
+npm test
+```
+
+## Install into a profile
+
+There is no `dsh` on PATH; invoke the CLI by path.
+
+```bash
+# `~` does NOT expand inside double quotes -- use $HOME.
+# The handle holds the PATH only: bin.js is the declared `bin` and runs on its own.
+# `DSH="node $HOME/..."` would break `$DSH ...` under zsh, which does not word-split.
+DSH="$HOME/.dsh/profiles/node_modules/@deepseek-ai/dsh/lib/bin.js"
+
+cd ..                                              # the directory CONTAINING this package
+$DSH plugin --profile web add -w ./__PLUGIN_NAME__ # -w is MANDATORY for `add`
+$DSH --profile web --dump-config | grep -A6 '__PLUGIN_NAME__'
+```
+
+`add` mutates `~/.dsh/profiles/web/package.json` twice: pnpm adds an absolute `link:` dependency,
+and dsh appends `__PLUGIN_NAME__` to `dsh.profile.bundles`. `cordis.yml` is never touched.
+
+## Configure
+
+Per-profile overrides go in `~/.dsh/profiles/<p>/cordis.patch.yml`, keyed on the row `id`:
+
+```yaml
+- id: __PLUGIN_ID__
+  config:
+    defaultMode: lower
+    maxLength: 4000        # a patch REPLACES `config` wholesale -- restate every key
+```
+
+Disable without uninstalling:
+
+```yaml
+- id: __PLUGIN_ID__
+  disabled: true
+```
+
+Only the two USER-layer patch files hot-reload: `~/.dsh/profiles/<p>/cordis.patch.yml` and
+`~/.dsh/cordis.patch.yml`. This package's own `cordis.patch.yml`, a rebuilt `dist/`, and bundle
+membership changes all need a profile restart -- module HMR is disabled in both stock profiles.
+
+## Uninstall
+
+```bash
+$DSH plugin --profile web remove __PLUGIN_NAME__   # no -w; remove by PACKAGE NAME
+```
+
+## Version pinning
+
+`devDependencies` are pinned to the versions the profile actually runs. Re-check after a dsh
+upgrade:
+
+```bash
+for p in cordis dsh-tools schemastery; do
+  echo -n "$p: "
+  node -p "require(require('os').homedir()+'/.dsh/profiles/node_modules/@deepseek-ai/$p/package.json').version"
+done
+```
+
+Never use `"*"` in `devDependencies`: npm's `latest` dist-tag for `@deepseek-ai/dsh-tools` points at
+an older, incompatible API line.

@@ -1,0 +1,28 @@
+# Profile layer for __PLUGIN_NAME__.
+#
+# `dsh plugin --profile <p> add -w <path>` promotes this package into
+# dsh.profile.bundles; this file is then composed as that bundle's layer.
+#
+# A row has exactly EIGHT legal keys:
+#   id, name, config, group, disabled, inject   (loader EntryOptions)
+#   intercept, isolate                          (added by the loader's isolate module)
+# Nothing else is legal.
+#   id        - stable, short, kebab-case. Later patch layers target THIS.
+#   name      - the INSTALLED PACKAGE NAME. Node must be able to resolve it.
+#   config    - every key is optional; src/config.ts supplies the defaults.
+#   group     - marks this entry as a nested group.
+#   disabled  - true removes the row; there is no `remove` directive.
+#   inject    - EVERY entry is required and blocking. Never list a cordis core
+#               member (logger, events, reflect, registry, fiber, root): they are
+#               plain properties, not services, so the plugin silently never loads.
+#   intercept - per-entry intercept config (Dict).
+#   isolate   - give this entry its own realm for the named services.
+#
+# Verify with:
+#   node $HOME/.dsh/profiles/node_modules/@deepseek-ai/dsh/lib/bin.js --profile web --dump-config
+- insert:
+    - id: __PLUGIN_ID__
+      name: __PLUGIN_NAME__
+      config:
+        defaultMode: upper
+        maxLength: 10000

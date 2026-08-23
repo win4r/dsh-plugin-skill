@@ -1,0 +1,38 @@
+import Schema from '@deepseek-ai/schemastery'
+
+/**
+ * Hoisted enum tuples MUST carry `as const`, or they widen to `string[]` and the
+ * inferred type collapses to `string`. (Tuples written INLINE inside a
+ * `defineTool()` call do not need it -- both of its type parameters are `const`.)
+ */
+export const MODES = ['upper', 'lower', 'title'] as const
+export type Mode = (typeof MODES)[number]
+
+/**
+ * `Config` is exported TWICE, under the same name:
+ *   - a TypeScript `interface`, for `apply(ctx, config: Config)`
+ *   - a runtime Schemastery schema, which is what Cordis validates against
+ * Declaration merging keeps them a single name. Exporting a plain object as
+ * `Config` does NOT work -- Cordis requires a Standard Schema (v1) implementation.
+ */
+export interface Config {
+  /** Applied when the caller does not pass `mode`. */
+  defaultMode: Mode
+  /** Input longer than this is truncated (and reported, never silently). */
+  maxLength: number
+  /** Tags merged into every result. */
+  tags: string[]
+}
+
+export const Config: Schema<Config> = Schema.object({
+  defaultMode: Schema.union(MODES)
+    .default('upper')
+    .description('Transform applied when the tool call omits `mode`.'),
+  maxLength: Schema.number()
+    .min(1)
+    .default(10_000)
+    .description('Maximum input length. Longer input is truncated and flagged.'),
+  tags: Schema.array(Schema.string())
+    .default([])
+    .description('Tags merged into every result.'),
+})

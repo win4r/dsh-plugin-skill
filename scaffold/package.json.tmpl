@@ -1,0 +1,45 @@
+{
+  "name": "__PLUGIN_NAME__",
+  "version": "0.1.0",
+  "description": "__DESCRIPTION__",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "prepare": "npm run build",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "cordis"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "*",
+    "@deepseek-ai/dsh-tools": "*",
+    "@deepseek-ai/schemastery": "*"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "__CORDIS_VERSION__",
+    "@deepseek-ai/dsh-tools": "__DSH_TOOLS_VERSION__",
+    "@deepseek-ai/schemastery": "__SCHEMASTERY_VERSION__",
+    "@types/node": "__NODE_TYPES_VERSION__",
+    "typescript": "__TYPESCRIPT_VERSION__"
+  }
+}

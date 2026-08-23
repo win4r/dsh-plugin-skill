@@ -1,0 +1,169 @@
+import type { Context } from '@deepseek-ai/cordis'
+import { defineTool, type ToolRunContext } from '@deepseek-ai/dsh-tools'
+
+import { Config, MODES, type Mode } from './config.js'
+
+export { Config, MODES }
+export type { Mode }
+
+/**
+ * Module-level plugin exports. The complete legal set is:
+ *   name?, Config?, inject?, provide?, intercept?  + the entrypoint (`apply`).
+ * `reusable`, `disposable` and `using` do NOT exist in cordis 4.0.1.
+ */
+export const name = '__PLUGIN_NAME__'
+
+/**
+ * Every entry is REQUIRED and blocking; the framework waits for the service
+ * before running `apply`, and re-runs `apply` whenever it changes.
+ * For an OPTIONAL dependency, omit it here and use `ctx.get('name')` instead.
+ */
+export const inject = ['tools']
+
+/**
+ * Values returned through the tool's output schema must be `type` aliases, never
+ * `interface` declarations: only type aliases pick up the implicit index
+ * signature that makes them assignable to `JsonValue`. Members must also not be
+ * optional -- an `undefined` property fails a JSON node, so absent values are `null`.
+ */
+export type TransformResult = {
+  text: string
+  mode: Mode
+  length: number
+  words: number
+  tags: string[]
+  meta: { plugin: string; truncated: boolean }
+}
+
+/** Pure logic, exported so `test/logic.test.mjs` can drive it without a harness. */
+export function transform(input: string, mode: Mode): string {
+  switch (mode) {
+    case 'upper':
+      return input.toUpperCase()
+    case 'lower':
+      return input.toLowerCase()
+    case 'title':
+      return input.replace(/\b\w/g, (c) => c.toUpperCase())
+  }
+}
+
+export function countWords(input: string): number {
+  const trimmed = input.trim()
+  return trimmed ? trimmed.split(/\s+/).length : 0
+}
+
+export function apply(ctx: Context, config: Config) {
+  const log = getLogger(ctx)
+
+  // `apply()` can run MANY times per process: a required service disappearing
+  // disposes this plugin and its return reloads it. Anything registered through
+  // `ctx` is unwound automatically; external resources are not, so they go in a
+  // `ctx.effect`. Disposers run in REVERSE order, on unload or on the returned
+  // disposer, whichever comes first.
+  const inflight = new Set<AbortController>()
+  ctx.effect(() => () => {
+    for (const controller of inflight) controller.abort()
+    inflight.clear()
+  }, '__PLUGIN_ID__:inflight')
+
+  // register() returns the exact disposer; the fiber calls it on unload for you.
+  ctx.tools.register(
+    defineTool({
+      name: '__TOOL_NAME__',
+      description:
+        '__DESCRIPTION__ Describe WHEN to call this tool, not just what it does -- ' +
+        'this text is the only thing the model uses to decide.',
+
+      // `parameters` is an IMPLICIT open object root: write the property map
+      // directly, never `{ type: 'object', properties: { ... } }`.
+      // Requiredness is the per-property annotation `required: true`.
+      // There is NO JSON-Schema `required: [...]` array.
+      parameters: {
+        text: {
+          type: 'string',
+          required: true,
+          description: 'The text to transform.',
+        },
+        mode: {
+          type: 'string',
+          enum: MODES,
+          description: 'Transform to apply. Defaults to the configured defaultMode.',
+        },
+        tags: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Extra tags to attach to the result.',
+        },
+      },
+
+      output: {
+        // Every explicit `{ type: 'object' }` node REQUIRES an explicit
+        // `additionalProperties: boolean`. `{ type: 'json' }` is the author-only
+        // node meaning "arbitrary JsonValue".
+        schema: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            text: { type: 'string', required: true },
+            mode: { type: 'string', enum: MODES, required: true },
+            length: { type: 'number', required: true },
+            words: { type: 'number', required: true },
+            tags: { type: 'array', items: { type: 'string' }, required: true },
+            meta: { type: 'json', required: true },
+          },
+        },
+        render: (_args, value) => [
+          {
+            type: 'text',
+            text: `${value.text}\n\n(${value.words} words, ${value.length} chars, mode: ${value.mode})`,
+          },
+        ],
+      },
+
+      // Opt in only for pure reads that never touch parent-owned state.
+      isConcurrencySafe: () => true,
+
+      async execute(args, exec: ToolRunContext): Promise<TransformResult> {
+        // `exec.signal` is a REQUIRED AbortSignal. Thread it into every
+        // subprocess, fetch and long loop.
+        if (exec.signal.aborted) throw new Error('__TOOL_NAME__: aborted before start')
+
+        const mode: Mode = args.mode ?? config.defaultMode
+        const truncated = args.text.length > config.maxLength
+        // Never truncate silently -- report it in the value AND in the content.
+        const source = truncated ? args.text.slice(0, config.maxLength) : args.text
+        const text = transform(source, mode)
+
+        return {
+          text,
+          mode,
+          length: text.length,
+          words: countWords(source),
+          tags: [...config.tags, ...(args.tags ?? [])],
+          meta: { plugin: name, truncated },
+        }
+      },
+    }),
+  )
+
+  log.info?.(`__PLUGIN_NAME__ ready (defaultMode: ${config.defaultMode})`)
+}
+
+/** Cordis provides ctx.logger, but keep the plugin usable under a bare stub. */
+function getLogger(ctx: unknown) {
+  const candidate = (ctx as { logger?: unknown }).logger
+  try {
+    const logger = typeof candidate === 'function' ? candidate('__PLUGIN_ID__') : candidate
+    if (logger && typeof (logger as { info?: unknown }).info === 'function') {
+      return logger as Record<string, ((msg: string) => void) | undefined>
+    }
+  } catch {
+    /* fall through to the console shim */
+  }
+  return {
+    info: (m: string) => console.log(`[__PLUGIN_ID__] ${m}`),
+    warn: (m: string) => console.warn(`[__PLUGIN_ID__] ${m}`),
+    error: (m: string) => console.error(`[__PLUGIN_ID__] ${m}`),
+    debug: undefined,
+  }
+}

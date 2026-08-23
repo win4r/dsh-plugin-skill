@@ -1,0 +1,37 @@
+// Unit tests import from ../dist/*.js, so a passing run also proves the build
+// is loadable ESM. Run: npm run build && node --test test/*.test.mjs
+import assert from 'node:assert/strict'
+import { test } from 'node:test'
+
+import { Config, MODES, countWords, transform } from '../dist/index.js'
+
+test('transform covers every declared mode', () => {
+  assert.equal(transform('hello world', 'upper'), 'HELLO WORLD')
+  assert.equal(transform('HELLO WORLD', 'lower'), 'hello world')
+  assert.equal(transform('hello world', 'title'), 'Hello World')
+  assert.deepEqual([...MODES], ['upper', 'lower', 'title'])
+})
+
+test('countWords ignores surrounding and repeated whitespace', () => {
+  assert.equal(countWords('  a   b \n c '), 3)
+  assert.equal(countWords('   '), 0)
+  assert.equal(countWords(''), 0)
+})
+
+test('Config({}) applies every schema default', () => {
+  // This is exactly what the harness passes to apply() when the patch row
+  // supplies no config at all.
+  assert.deepEqual(Config({}), {
+    defaultMode: 'upper',
+    maxLength: 10000,
+    tags: [],
+  })
+})
+
+test('Config rejects a value outside the declared union', () => {
+  assert.throws(() => Config({ defaultMode: 'sideways' }))
+})
+
+test('Config rejects maxLength below the declared minimum', () => {
+  assert.throws(() => Config({ maxLength: 0 }))
+})
