@@ -1,5 +1,3 @@
-# [🚀观看我的哔哩哔哩视频](https://space.bilibili.com/3493277319825652)
-
 # dsh-plugin — DeepSeek Harness (DSH) Plugin Development Skill
 
 A comprehensive Claude Code / Codex skill for scaffolding, building, installing, verifying, and debugging **[DeepSeek Harness](https://deepseek-harness.github.io/deepseek-harness/)** plugins.
